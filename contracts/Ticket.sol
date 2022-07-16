@@ -11,6 +11,8 @@ struct LotteryItteration {
     uint256 startTime;
     uint256 endTime;
     uint256 prizePool;
+    uint256 numberOfParticipants;
+    bytes32 seed;
     bool claimed;
 }
 
@@ -18,8 +20,9 @@ contract Ticket is ERC721, Ownable {
     using Counters for Counters.Counter;
 
     // state
-    mapping(uint256 => LotteryItteration) lotteries;
-    mapping(uint256 => mapping(address => uint256)) userStakesInLottery;
+    mapping(uint256 => LotteryItteration) private lotteries;
+    mapping(uint256 => mapping(address => bool)) private hasUserParticipated;
+    mapping(uint256 => address[]) private totalUsersParticipated;
 
     Counters.Counter private ticketIds;
     Counters.Counter private lotteryIds;
@@ -62,6 +65,8 @@ contract Ticket is ERC721, Ownable {
             startTime: _startTime,
             endTime: _endTime,
             prizePool: 0,
+            numberOfParticipants: 0,
+            seed: "",
             claimed: false
         });
 
@@ -73,6 +78,7 @@ contract Ticket is ERC721, Ownable {
         payable
         lotteryIsActive
     {
+        require(_numberOfTickets > 0, "Cannot buy 0 tickets");
         LotteryItteration storage _lottery = _currentLottery();
         require(
             msg.value >= _numberOfTickets * _lottery.ticketPrice,
@@ -82,20 +88,55 @@ contract Ticket is ERC721, Ownable {
         for (uint8 i = 0; i < _numberOfTickets; i++) {
             _buyTicket();
         }
+
         _lottery.prizePool += (_numberOfTickets * _lottery.ticketPrice);
-        userStakesInLottery[lotteryIds.current()][
-            msg.sender
-        ] += _numberOfTickets;
+        if (!hasUserParticipated[lotteryIds.current()][msg.sender]) {
+            hasUserParticipated[lotteryIds.current()][msg.sender] = true;
+            totalUsersParticipated[lotteryIds.current()].push(msg.sender);
+            _lottery.numberOfParticipants++;
+        }
+
+        _lottery.seed = keccak256(
+            abi.encodePacked(
+                _lottery.seed,
+                msg.sender,
+                _numberOfTickets,
+                block.number
+            )
+        );
 
         emit TicketsBought(msg.sender, _numberOfTickets);
     }
 
-    function selectWinner() external onlyOwner {
+    function selectWinner() external onlyOwner returns (address _winner) {
         require(!_isLotteryActive(), "Lottery is still active");
         LotteryItteration storage _lottery = _currentLottery();
-        // TODO randomly select winner and send half of the prize pool
+
+        _lottery.seed = keccak256(
+            abi.encodePacked(
+                _lottery.seed,
+                msg.sender,
+                _lottery.numberOfParticipants,
+                block.number
+            )
+        );
+        uint256 _winnerIndex = uint256(_lottery.seed) %
+            _lottery.numberOfParticipants;
+        _winner = totalUsersParticipated[lotteryIds.current()][_winnerIndex];
+
+        // only for verifying purposes
+        console.log(
+            "Random number is '%d' and winner is '%s'",
+            _winnerIndex,
+            _winner
+        );
+
+        uint256 _prize = _lottery.prizePool / 2;
+        bool _sent = payable(_winner).send(_prize);
+        require(_sent, "Prize couldn't be sent");
+
         _lottery.claimed = true;
-        emit WinnerSelected(address(0), 2);
+        emit WinnerSelected(_winner, _prize);
     }
 
     function isLotteryActive() external view returns (bool) {
@@ -106,13 +147,14 @@ contract Ticket is ERC721, Ownable {
         return _currentLottery().prizePool;
     }
 
-    function stakesInCurrentLottery() external view returns (uint256) {
-        return userStakesInLottery[lotteryIds.current()][msg.sender];
+    function ticketPrice() external view returns (uint256) {
+        return _currentLottery().ticketPrice;
     }
 
     function _buyTicket() private {
         uint256 newItemId = ticketIds.current();
         _safeMint(msg.sender, newItemId);
+        // TODO Store the lottery id in the nft metadata
         ticketIds.increment();
     }
 

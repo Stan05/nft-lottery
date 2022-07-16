@@ -2,17 +2,24 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { simulateUsersInteractions } from "../scripts/utils";
 
 describe("Ticket", function () {
   async function deployTicketFixture() {
-    const [owner, otherAccount] = await ethers.getSigners();
+    const signers = await ethers.getSigners();
     const ticketPrice = ethers.utils.parseEther("0.001");
     const lotteryDurationInHours = 1;
 
     const TicketFactory = await ethers.getContractFactory("Ticket");
     const ticket = await TicketFactory.deploy();
 
-    return { ticket, owner, otherAccount, ticketPrice, lotteryDurationInHours };
+    return {
+      ticket,
+      owner: signers[0],
+      signers: signers.slice(1),
+      ticketPrice,
+      lotteryDurationInHours,
+    };
   }
 
   describe("Deployment", function () {
@@ -54,6 +61,17 @@ describe("Ticket", function () {
         );
       });
 
+      it("Should reject buying zero tickets", async function () {
+        const { ticket, ticketPrice, lotteryDurationInHours } =
+          await loadFixture(deployTicketFixture);
+
+        await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
+
+        await expect(
+          ticket.buyTickets(0, { value: ticketPrice })
+        ).to.be.revertedWith("Cannot buy 0 tickets");
+      });
+
       it("Should reject buying tickets when funds are not enough", async function () {
         const { ticket, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
@@ -68,69 +86,53 @@ describe("Ticket", function () {
 
     describe("Events", function () {
       it("Should emit an event when buy tickets", async function () {
-        const { ticket, otherAccount, ticketPrice, lotteryDurationInHours } =
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
         const numberOfTickets = 3;
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
 
         await expect(
-          ticket.connect(otherAccount).buyTickets(numberOfTickets, {
+          ticket.connect(signers[0]).buyTickets(numberOfTickets, {
             value: ticketPrice.mul(numberOfTickets),
           })
         )
           .to.emit(ticket, "TicketsBought")
-          .withArgs(otherAccount.address, numberOfTickets);
+          .withArgs(signers[0].address, numberOfTickets);
       });
     });
 
-    describe("Transfers", function () {
+    describe("Functionality", function () {
       it("Should transfer bought tickets", async function () {
-        const { ticket, otherAccount, ticketPrice, lotteryDurationInHours } =
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
         const numberOfTickets = 4;
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
 
-        await ticket.connect(otherAccount).buyTickets(numberOfTickets, {
+        await ticket.connect(signers[0]).buyTickets(numberOfTickets, {
           value: ticketPrice.mul(numberOfTickets),
         });
 
-        expect(await ticket.balanceOf(otherAccount.address)).to.equal(
+        expect(await ticket.balanceOf(signers[0].address)).to.equal(
           numberOfTickets
         );
       });
 
       it("Should increase pool size for current lottery", async function () {
-        const { ticket, otherAccount, ticketPrice, lotteryDurationInHours } =
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
         const numberOfTickets = 4;
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
 
-        await ticket.connect(otherAccount).buyTickets(numberOfTickets, {
+        await ticket.connect(signers[0]).buyTickets(numberOfTickets, {
           value: ticketPrice.mul(numberOfTickets),
         });
 
         expect(await ticket.prizePool()).to.equal(
           ticketPrice.mul(numberOfTickets)
         );
-      });
-
-      it("Should increase user stakes in current lottery", async function () {
-        const { ticket, otherAccount, ticketPrice, lotteryDurationInHours } =
-          await loadFixture(deployTicketFixture);
-        const numberOfTickets = 4;
-
-        await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
-
-        await ticket.connect(otherAccount).buyTickets(numberOfTickets, {
-          value: ticketPrice.mul(numberOfTickets),
-        });
-
-        expect(
-          await ticket.connect(otherAccount).stakesInCurrentLottery()
-        ).to.equal(numberOfTickets);
       });
     });
   });
@@ -173,53 +175,66 @@ describe("Ticket", function () {
     });
   });
 
-  describe("Draw Winner", function () {
+  describe("Select Winner", function () {
     describe("Validations", function () {
-      it("Should reject drawing winner when lottery is active", async function () {
+      it("Should reject selecting a winner when lottery is active", async function () {
         const { ticket, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
+
         await expect(ticket.selectWinner()).to.revertedWith(
           "Lottery is still active"
         );
       });
 
-      it("Should reject drawing winner when not called by owner", async function () {
-        const { ticket, otherAccount, ticketPrice, lotteryDurationInHours } =
+      it("Should reject selecting a winner when not called by owner", async function () {
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
-        await expect(
-          ticket.connect(otherAccount).selectWinner()
-        ).to.revertedWith("Ownable: caller is not the owner");
+
+        await expect(ticket.connect(signers[0]).selectWinner()).to.revertedWith(
+          "Ownable: caller is not the owner"
+        );
       });
     });
 
     describe("Events", function () {
       it("Should emit event on selecting winner", async function () {
-        const { ticket, ticketPrice, lotteryDurationInHours } =
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
 
+        await simulateUsersInteractions(signers, ticket);
+
         await time.increase(lotteryDurationInHours * 60 * 60 * 60);
 
-        await expect(ticket.selectWinner()).to.emit(ticket, "WinnerSelected");
+        await expect(ticket.selectWinner())
+          .to.emit(ticket, "WinnerSelected")
+          .withArgs(anyValue, (await ticket.prizePool()).div(2));
       });
     });
 
     describe("Functionality", function () {
-      it("Should set current state claimed", async function () {
-        const { ticket, ticketPrice, lotteryDurationInHours } =
+      it("Should send the prize to the winner from contract balance", async function () {
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
           await loadFixture(deployTicketFixture);
 
         await ticket.startNewLottery(lotteryDurationInHours, ticketPrice);
 
+        await simulateUsersInteractions(signers, ticket);
+
         await time.increase(lotteryDurationInHours * 60 * 60 * 60);
 
-        await expect(ticket.selectWinner()).to.revertedWith(
-          "Lottery is still active"
+        const prizePool = await ticket.prizePool();
+        const initialBalance = await ethers.provider.getBalance(ticket.address);
+
+        await expect(ticket.selectWinner()).to.be.not.reverted;
+
+        expect(await ethers.provider.getBalance(ticket.address)).to.equal(
+          initialBalance.sub(prizePool.div(2))
         );
       });
     });
