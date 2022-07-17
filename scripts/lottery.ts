@@ -2,21 +2,20 @@ import { BigNumber, Contract } from "ethers";
 import { ethers } from "hardhat";
 import { simulateUsersInteractions } from "./utils";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
-import { LotteryEngine, Ticket } from "../typechain-types";
+import { LotteryEngine, Proxy__factory, Ticket } from "../typechain-types";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
 async function resolveProxyContract(
-  proxyAddress: string
+  proxyAddress: string,
+  owner: SignerWithAddress
 ): Promise<LotteryEngine> {
   console.log("Resolving the Proxy contract");
-  const Proxy = await ethers.getContractFactory("Proxy");
   if (proxyAddress) {
     return (await ethers.getContractFactory("LotteryEngine")).attach(
       proxyAddress
     );
   }
-  console.log(
-    "Proxy address was not provided, deploying new Ticket and Proxy."
-  );
+  console.log("Proxy address was not provided, proceeding with setup.");
 
   const Ticket = await ethers.getContractFactory("Ticket");
   const ticket = await Ticket.deploy("LotteryTicketNFT", "LTNFT");
@@ -29,16 +28,21 @@ async function resolveProxyContract(
   await lotteryEngine.initialize();
   console.log("Lottery Engine deployed at address '%s'", lotteryEngine.address);
 
-  const proxy = await Proxy.deploy();
-  await proxy.deployed();
-  await proxy.initialize(lotteryEngine.address);
-  console.log("Proxy deployed at address '%s'", proxy.address);
+  const ProxyFactory = await ethers.getContractFactory("ProxyFactory");
+  const proxyFactory = await ProxyFactory.deploy();
+  await proxyFactory.deployed();
+  console.log("Proxy Factory deployed at '%s'", proxyFactory.address);
+  const salt = Math.floor(Math.random() * 10);
 
-  console.log("Proxy owner is '%s'", await proxy.owner());
-  console.log("LotteryEngine owner is '%s'", await lotteryEngine.owner());
+  const newProxyAddress = await proxyFactory.getAddress(
+    Proxy__factory.bytecode,
+    salt
+  );
+  console.log("Deploying Proxy using Factory at address '%s'", newProxyAddress);
+  await proxyFactory.deploy(salt, lotteryEngine.address, owner.address);
 
   // Has to set the used ticket through proxy, so that the address is kept in the proxy storage
-  const proxiedLotteryEngine = LotteryEngine.attach(proxy.address);
+  const proxiedLotteryEngine = LotteryEngine.attach(newProxyAddress);
   await proxiedLotteryEngine.setTicket(ticket.address);
   return proxiedLotteryEngine;
 }
@@ -49,8 +53,10 @@ module.exports = async (
   lotteryDurationInHours: number = 1,
   ticketPrice: BigNumber = ethers.utils.parseEther("0.001")
 ) => {
-  const proxy = await resolveProxyContract(proxyAddress);
   const signers = await ethers.getSigners();
+  const owner = signers[0];
+  const users = signers.slice(1);
+  const proxy = await resolveProxyContract(proxyAddress, owner);
 
   proxy.on(proxy.filters.WinnerSelected(), (user, prize, lotteryItteration) => {
     console.log(
@@ -64,7 +70,7 @@ module.exports = async (
   for (let index = 1; index <= numberOfLotteriesToSimulate; index++) {
     console.log("\nStarting lottery itteration '%d'", index);
     await proxy.startNewLottery(lotteryDurationInHours, ticketPrice);
-    await simulateUsersInteractions(signers, proxy);
+    await simulateUsersInteractions(users, proxy);
     await time.increase(lotteryDurationInHours * 60 * 60 * 60);
     await proxy.selectWinner();
     console.log("Finished lottery itteration '%d'", index);

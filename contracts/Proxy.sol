@@ -12,9 +12,13 @@ contract Proxy is OwnableUpgradeable, ProxyUpgradableStorage {
     /**
      * @dev The initializer function, needed for OZ upgradable contracts
      */
-    function initialize(address _implementation) external initializer {
+    function initialize(address _implementation, address _owner)
+        external
+        initializer
+    {
         __Ownable_init();
         setImplementation(_implementation);
+        transferOwnership(_owner);
     }
 
     /**
@@ -44,6 +48,7 @@ contract Proxy is OwnableUpgradeable, ProxyUpgradableStorage {
      * @dev Delegates the current call to `_implementation`.
      */
     function _delegate(address _implementation) internal {
+        require(_implementation != address(0), "Implementation is not set");
         assembly {
             // Copy msg.data. We take full control of memory in this inline assembly
             // block because it will not return to Solidity code. We overwrite the
