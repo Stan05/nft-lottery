@@ -3,9 +3,16 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-storage-layout";
 
+task("prepare", "Clean and compile contracts and types").setAction(
+  async ({}, hre) => {
+    await hre.run("clean");
+    await hre.run("compile");
+  }
+);
+
 task("storage-layout", "Output the storage layout of the contracts").setAction(
   async ({}, hre) => {
-    await hre.run("compile");
+    await hre.run("prepare");
     await hre.storageLayout.export();
   }
 );
@@ -23,7 +30,6 @@ task("lottery", "Runs a lottery simulation")
   .addOptionalParam("ticketPrice", "The ticket price of the lottery")
   .setAction(
     async ({ proxyAddress, simulations, duration, ticketPrice }, hre) => {
-      await hre.run("compile");
       const lottery = require("./scripts/lottery");
       return await lottery(proxyAddress, simulations, duration, ticketPrice);
     }

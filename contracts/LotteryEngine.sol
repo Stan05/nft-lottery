@@ -145,7 +145,7 @@ contract LotteryEngine is OwnableUpgradeable {
                 _lottery.seed,
                 msg.sender,
                 _numberOfTickets,
-                block.number //TODO use blockhash?
+                blockhash(block.number)
             )
         );
 
@@ -167,7 +167,7 @@ contract LotteryEngine is OwnableUpgradeable {
                 _lottery.seed,
                 msg.sender,
                 _lottery.numberOfParticipants,
-                block.number
+                blockhash(block.number)
             )
         );
         uint256 _winnerIndex = uint256(_lottery.seed) %

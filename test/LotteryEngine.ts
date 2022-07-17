@@ -337,7 +337,7 @@ describe("LotteryEngine", function () {
     });
   });
 
-  describe.only("Set Ticket", function () {
+  describe("Set Ticket", function () {
     describe("Validations", function () {
       it("Should reject setting a ticket which is not IERC721 interface", async function () {
         const { lotteryEngine, signers } = await loadFixture(
