@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "hardhat/console.sol";
 
 struct LotteryItteration {
@@ -16,7 +16,7 @@ struct LotteryItteration {
     bool claimed;
 }
 
-contract Ticket is ERC721, Ownable {
+contract Ticket is OwnableUpgradeable, ERC721Upgradeable {
     using Counters for Counters.Counter;
 
     // state
@@ -34,18 +34,25 @@ contract Ticket is ERC721, Ownable {
         uint256 ticketPrice
     );
     event TicketsBought(address user, uint8 numberOfTickets);
-    event WinnerSelected(address user, uint256 prize);
+    event WinnerSelected(
+        address user,
+        uint256 prize,
+        uint256 lotteryItteration
+    );
 
     // errors
     error LotteryIsNotActive();
-
-    constructor() ERC721("TicketNFT", "TFT") {}
 
     modifier lotteryIsActive() {
         if (!_isLotteryActive()) {
             revert LotteryIsNotActive();
         }
         _;
+    }
+
+    function initialize() public initializer {
+        __Ownable_init();
+        __ERC721_init("TicketNFT", "TFT");
     }
 
     function startNewLottery(uint256 _numHours, uint256 _ticketPrice)
@@ -101,7 +108,7 @@ contract Ticket is ERC721, Ownable {
                 _lottery.seed,
                 msg.sender,
                 _numberOfTickets,
-                block.number
+                block.number //TODO use blockhash?
             )
         );
 
@@ -136,7 +143,7 @@ contract Ticket is ERC721, Ownable {
         require(_sent, "Prize couldn't be sent");
 
         _lottery.claimed = true;
-        emit WinnerSelected(_winner, _prize);
+        emit WinnerSelected(_winner, _prize, lotteryIds.current());
     }
 
     function isLotteryActive() external view returns (bool) {

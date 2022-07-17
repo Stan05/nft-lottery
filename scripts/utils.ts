@@ -1,6 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { BigNumber } from "ethers";
-import { Ticket } from "../typechain-types";
+import { Contract } from "ethers";
+import { Ticket__factory } from "../typechain-types";
 
 /**
  * Shuffles array in place.
@@ -15,20 +15,20 @@ function shuffle(a: any[]) {
 }
 
 /**
- * Simulates interactions from different users with the Ticket contract,
- * by buing random number of tickets between 1 and 10.
+ * Simulates interactions from different users with the Proxy contract,
+ * by buying random number of tickets between 1 and 10.
  *
  * @param signers the user addresses to interact with
- * @param ticket the ticket contract
+ * @param proxy the proxy contract
  */
 async function simulateUsersInteractions(
   signers: SignerWithAddress[],
-  ticket: Ticket
+  proxy: Contract
 ) {
-  const ticketPrice = await ticket.ticketPrice();
+  const ticketPrice = await proxy.ticketPrice();
   for (const signer of shuffle(signers)) {
     const numberOfTickets = Math.floor(Math.random() * 10) + 1;
-    await ticket.connect(signer).buyTickets(numberOfTickets, {
+    await proxy.connect(signer).buyTickets(numberOfTickets, {
       value: ticketPrice.mul(numberOfTickets),
     });
   }

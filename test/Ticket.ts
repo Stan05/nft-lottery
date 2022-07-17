@@ -12,6 +12,9 @@ describe("Ticket", function () {
 
     const TicketFactory = await ethers.getContractFactory("Ticket");
     const ticket = await TicketFactory.deploy();
+    await ticket.deployed();
+
+    ticket.initialize();
 
     return {
       ticket,
@@ -162,6 +165,17 @@ describe("Ticket", function () {
           ticket.startNewLottery(lotteryDurationInHours, ticketPrice)
         ).to.be.revertedWith("Current lottery is still not claimed");
       });
+
+      it("Should reject starting new lottery when not called by owner", async function () {
+        const { ticket, signers, ticketPrice, lotteryDurationInHours } =
+          await loadFixture(deployTicketFixture);
+
+        await expect(
+          ticket
+            .connect(signers[0])
+            .startNewLottery(lotteryDurationInHours, ticketPrice)
+        ).to.revertedWith("Ownable: caller is not the owner");
+      });
     });
 
     describe("Events", function () {
@@ -213,7 +227,7 @@ describe("Ticket", function () {
 
         await expect(ticket.selectWinner())
           .to.emit(ticket, "WinnerSelected")
-          .withArgs(anyValue, (await ticket.prizePool()).div(2));
+          .withArgs(anyValue, (await ticket.prizePool()).div(2), anyValue);
       });
     });
 
