@@ -1,4 +1,15 @@
-# NFT Lottery
+# How to Start
+
+- After checkout run the below commands:
+  1. `yarn`
+  2. `npx hardhat prepare` - Compiles Solidity contracts and typechain types
+  3. `npx hardhat lottery` - To spin up a temporary hardhat node and execute default lottery simulation
+- Alternative options:
+  1. Execute 1 and 2 from above
+  2. `npx hardhat node`
+  3. `npx hardhat lottery --simulations 5 --network localhost --proxy-address <already-deployed-proxy>`
+
+# NFT Lottery Task Definition
 
 You have to create a NFT Lottery on a Hardhat environment( https://hardhat.org ).
 Users should be able to buy a ticket which is an actual NFT. The funds from each ticket purchase are gathered in a prize pool. After a certain period of time a random winner should be chosen. We also want to be able to update our NFT tickets in the future.
@@ -18,8 +29,6 @@ Users should be able to buy a ticket which is an actual NFT. The funds from each
   - A function for a surprise winner should be created which will award the random generated winner with 50% of the gathered funds.
 
 ## Proxy
-
-//TODO Use hardhat-upgrades https://www.youtube.com/watch?v=huTX9pO8gPw
 
 - A simple proxy contract should be created that should use the deployed ticket as its implementation.
 
@@ -44,11 +53,3 @@ The complicity of the contracts and testing is up to you.
 - Hardhat
 - Ethers / Web3
 - Any other library considered necessary
-
-### Submissions
-
-- Please upload your complete source code to a GitHub repo.
-- How we will test your code:
-  1. `git clone`
-  2. `yarn`
-  3. `npx hardhat run scripts/lottery.js` OR `npx hardhat test` (if bonus task is done)
