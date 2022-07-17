@@ -373,25 +373,13 @@ describe("LotteryEngine", function () {
 
     describe("Events", function () {
       it("Should emit event on set a new ticket", async function () {
-        const { lotteryEngine, signers, ticketPrice, lotteryDurationInHours } =
-          await loadFixture(deployLotteryEngineFixture);
-
-        await lotteryEngine.startNewLottery(
-          lotteryDurationInHours,
-          ticketPrice
+        const { lotteryEngine, ticket } = await loadFixture(
+          deployLotteryEngineFixture
         );
 
-        await simulateUsersInteractions(signers, lotteryEngine);
-
-        await time.increase(lotteryDurationInHours * 60 * 60 * 60);
-
-        await expect(lotteryEngine.selectWinner())
-          .to.emit(lotteryEngine, "WinnerSelected")
-          .withArgs(
-            anyValue,
-            (await lotteryEngine.prizePool()).div(2),
-            anyValue
-          );
+        await expect(lotteryEngine.setTicket(ticket.address))
+          .to.emit(lotteryEngine, "TicketUpdated")
+          .withArgs(ticket.address);
       });
     });
 

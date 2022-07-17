@@ -50,6 +50,7 @@ contract LotteryEngine is OwnableUpgradeable {
         uint256 prize,
         uint256 lotteryItteration
     );
+    event TicketUpdated(address ticket);
 
     // errors
     error LotteryIsNotActive();
@@ -248,5 +249,6 @@ contract LotteryEngine is OwnableUpgradeable {
 
     function _setTicket(address _ticket) internal {
         ticket = Ticket(_ticket);
+        emit TicketUpdated(_ticket);
     }
 }
